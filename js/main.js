@@ -1,4 +1,15 @@
-//Imports
+//********************************************************************************************************************
+//  Business Balloons
+//  Author: Alex Kahn
+//  Company: Event Games
+//  Date: 9/14/2023
+//  Description: A game where you pop balloons to get points
+//  Resources: sources.txt
+//********************************************************************************************************************
+
+//********************************************************************************************************************
+//  Imports
+//********************************************************************************************************************
 
 import * as THREE from "three";
 import Stats from "three/addons/libs/stats.module.js";
@@ -9,33 +20,64 @@ import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { FontLoader } from "three/addons/loaders/FontLoader.js";
 import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
 
-// Global Variables
+//********************************************************************************************************************
+//  Global Variables
+//********************************************************************************************************************
 
-let renderer, scene, gui, camera, orbitalControls;
-let balloonMaterial, logoMaterial;
-let balloonMesh, frontLogoMesh, backLogoMesh, poppedBalloonMesh;
+//--------------------------------------------------------------------------------------------
+//  ThreeJS Variables
+//--------------------------------------------------------------------------------------------
+let renderer, scene, gui, camera, orbitalControls, aspect;
+
+//--------------------------------------------------------------------------------------------
+//  Mesh Variables
+//--------------------------------------------------------------------------------------------
+let balloonMesh, poppedBalloonMesh;
+
+//--------------------------------------------------------------------------------------------
+//  Material Variables
+//--------------------------------------------------------------------------------------------
 let logoTexture;
-let footerMaterial;
-let selected = null;
-let numbersLoaded = false;
-let balloonGeometries = [];
-let numbers = [];
-let balloonData = [];
-let mouse = new THREE.Vector2();
 
+//--------------------------------------------------------------------------------------------
+//  Object Variables
+//--------------------------------------------------------------------------------------------
+let balloonData = [];
+
+//--------------------------------------------------------------------------------------------
+//  Mouse Variables
+//--------------------------------------------------------------------------------------------
+let selected = null;
+let mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+
+//--------------------------------------------------------------------------------------------
+//  Statistic Variables
+//--------------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
 const stats = new Stats();
+
+
+//--------------------------------------------------------------------------------------------
+//  Loader Variables
+//--------------------------------------------------------------------------------------------
 const glbLoader = new GLTFLoader();
 const rgbeLoader = new RGBELoader();
 const fontLoader = new FontLoader();
+const audioLoader = new THREE.AudioLoader();
 const textureLoader = new THREE.TextureLoader();
-const maxBalloons = 50;
+
+//--------------------------------------------------------------------------------------------
+//  Audio Variables
+//--------------------------------------------------------------------------------------------
+const audioListener = new THREE.AudioListener();
+
+//--------------------------------------------------------------------------------------------
+//  Geometry Default Variables
+//--------------------------------------------------------------------------------------------
 const quaternion = new THREE.Quaternion();
 const balloonScale = new THREE.Vector3(20, 20, 20);
-const logoScale = new THREE.Vector3(5, 5, 5);
-
-document.body.appendChild(stats.dom);
+const maxBalloons = 50;
 
 const api = {
   velocity: 0.1,
@@ -44,11 +86,25 @@ const api = {
   timer: clock.getElapsedTime(),
 };
 
-// Initialize
+//********************************************************************************************************************
+//  Main (starts the render loop)
+//********************************************************************************************************************
+
+init();
+animate();
+
+
+//********************************************************************************************************************
+//  Functions
+//********************************************************************************************************************
+
+//--------------------------------------------------------------------------------------------
+//  Initialize the scene and all of its components
+//--------------------------------------------------------------------------------------------
 
 function init() {
   // renderer
-  renderer = new THREE.WebGLRenderer();
+  renderer = new THREE.WebGLRenderer({ antialias: true});
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // default THREE.PCFShadowMap
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -57,28 +113,25 @@ function init() {
   // scene
   scene = new THREE.Scene();
 
-  // sky
-  rgbeLoader.load("./resources/skies/sky.hdr", function (texture) {
-    texture.mapping = THREE.EquirectangularReflectionMapping;
-    scene.background = texture;
-    scene.environment = texture;
-  });
-
   // camera
+  aspect = window.innerWidth / window.innerHeight;
   camera = new THREE.PerspectiveCamera(
-    45,
-    window.innerWidth / window.innerHeight,
-    1,
-    1000,
+    75, // fov
+    aspect, // aspect ratio
+    0.1, // near clipping plane 
+    1000 // far clipping plane
   );
   camera.position.set(0, 0, 75);
-  camera.rotation.order = "YXZ";
+  //camera.rotation.order = "YXZ"; 
+
+  // audio
+  camera.add(audioListener);
 
   // orbital controls
   orbitalControls = new OrbitControls(camera, renderer.domElement);
   orbitalControls.enablePan = false;
 
-  // light
+  // lights
   const light = new THREE.PointLight(0xffffff, 0.9, 0, 100000);
   light.position.set(0, 50, 120);
   light.castShadow = true;
@@ -99,15 +152,18 @@ function init() {
   scene.add(light);
   scene.add(directionalLight);
 
+  // sky
+  rgbeLoader.load("./resources/skies/sky.hdr", function (texture) {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = texture;
+    scene.environment = texture;
+  });
+
   // balloon
   createBalloons();
 
   // gui
   createGUI();
-
-  //overlay
-  //createNumberGeometries();
-  //createOverlay();
 
   // event listeners
   window.addEventListener("resize", onWindowResize);
@@ -115,10 +171,14 @@ function init() {
   window.addEventListener("mousemove", mouseMove, false);
   window.addEventListener("keydown", onDocumentKeyDown, false);
   window.addEventListener("keyup", onDocumentKeyUp, false);
+
+  // stats
+  document.body.appendChild(stats.dom);
 }
 
-// GUI
-
+//--------------------------------------------------------------------------------------------
+//  Create the GUI using the functions from the lil-gui module
+//--------------------------------------------------------------------------------------------
 function createGUI() {
   gui = new GUI();
   gui.add(api, "velocity", 0, 2).onChange(updateVelocities);
@@ -128,108 +188,24 @@ function createGUI() {
 
 }
 
-// Overlay
-
-function createOverlay() {
-  const footerGeometry = new THREE.BoxGeometry(75, 5, 1);
-  const footerMaterial = getFooterMaterial();
-  const footerMesh = new THREE.Mesh(footerGeometry, footerMaterial);
-  footerMesh.position.set(0, -17, 30);
-  scene.add(footerMesh);
-}
-
-function getFooterMaterial() {
-  // Define a shader for the rainbow animation
-  const rainbowVertexShader = `
-  varying vec2 vUv;
-  uniform float time;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-  `;
-
-  const rainbowFragmentShader = `
-  varying vec2 vUv;
-  uniform float time;
-
-  void main() {
-    vec3 rainbowColors = vec3(
-      0.5 + 0.5 * sin(time),
-      0.5 + 0.5 * sin(time + 2.0),
-      0.5 + 0.5 * sin(time + 4.0)
-    );
-    
-    gl_FragColor = vec4(rainbowColors, 1.0);
-  }
-  `;
-
-  // Create a shader material
-  footerMaterial = new THREE.ShaderMaterial({
-    vertexShader: rainbowVertexShader,
-    fragmentShader: rainbowFragmentShader,
-    uniforms: {
-      time: { value: 0.0 }, // Time uniform for animation
-    },
-  });
-
-  return footerMaterial;
-}
-
-// Numbers
-
-function createNumberGeometries() {
-  fontLoader.load('./resources/fonts/Gloock_Regular.json', function (font) {
-    for (let i = 0; i < 10; i++) {
-      let numberGeometry = new TextGeometry(i.toString(), {
-        font: font,
-        size: 10,
-        height: 1,
-        curveSegments: 12,
-        bevelEnabled: false,
-      });
-
-      let numberMaterial = new THREE.MeshPhongMaterial();
-      let numberMesh = new THREE.Mesh(numberGeometry, numberMaterial);
-      numberMesh.position.set(0, 0, 0);
-      numberMesh.rotation.set(0, 0, 0);
-      numbers.push(numberMesh);
-    }
-  });
-
-  numbersLoaded = true;
-}
-
-// Balloon
-
+//--------------------------------------------------------------------------------------------
+//  Create the balloons using the GLTF loader and an instanced mesh to render them efficiently
+//--------------------------------------------------------------------------------------------
 function createBalloons() {
   glbLoader.load("resources/props/balloon.glb", function (gltf) {
-    let balloon = gltf.scene;
+    const balloon = gltf.scene;
+    let balloonGeometries = [];
     balloon.speed = api.speed;
     balloon.traverse(function (node) {
       if (node.isMesh) {
         balloonGeometries.push(node.geometry);
-        console.log(node.name);
       }
     });
 
-    balloonMaterial = new THREE.MeshPhongMaterial();
+    const balloonMaterial = new THREE.MeshPhongMaterial();
     balloonMesh = new THREE.InstancedMesh(
-      balloonGeometries[0], // Use the geometry from the GLTF model
+      balloonGeometries[0], 
       balloonMaterial,
-      maxBalloons,
-    );
-
-    frontLogoMesh = new THREE.InstancedMesh(
-      balloonGeometries[1], // Use the geometry from the GLTF model
-      logoMaterial,
-      maxBalloons,
-    );
-
-    backLogoMesh = new THREE.InstancedMesh(
-      balloonGeometries[2], // Use the geometry from the GLTF model
-      logoMaterial,
       maxBalloons,
     );
 
@@ -239,6 +215,9 @@ function createBalloons() {
   });
 }
 
+//--------------------------------------------------------------------------------------------
+//  Initialize the balloons by setting their properties and then adding the data to the array
+//--------------------------------------------------------------------------------------------
 function initBalloons() {
   for (let i = 0; i < maxBalloons; i++) {
     let startX = Math.random() * 50 - 25;
@@ -323,16 +302,13 @@ function mouseDown(event) {
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
 
-  var intersects = raycaster.intersectObjects([balloonMesh]);
-
-  for (var i = 0; i < intersects.length; i++) {
-    selected = intersects[i].instanceId;
-    console.log("Selected object: " + selected);
+  let intersects = raycaster.intersectObjects([balloonMesh]);
+  if (intersects.length > 0) {
+    selected = intersects[0].instanceId;
     balloonMesh.setColorAt(selected, new THREE.Color(0x0000ff));
     balloonMesh.instanceColor.needsUpdate = true;
     balloonData[selected].popped = true;
-    api.score ++;
-    console.log(api.score);
+    api.score ++;  
   }
 }
 
@@ -369,10 +345,6 @@ function onDocumentKeyUp(event) {}
 
 // Animation Functions
 
-function render() {
-  renderer.render(scene, camera);
-}
-
 function animate() {
   requestAnimationFrame(animate);
 
@@ -387,9 +359,3 @@ function animate() {
   api.timer = clock.getElapsedTime();
 
 }
-
-// Main Functions (starts the render loop)
-
-init();
-render();
-animate();
