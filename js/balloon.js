@@ -14,27 +14,27 @@ const maxBalloons = 50;
 //--------------------------------------------------------------------------------------------
 //  Create the balloons using the GLTF loader and an instanced mesh to render them efficiently
 //--------------------------------------------------------------------------------------------
-export function createBalloons(scene, api, glbLoader) {
-    return new Promise((resolve, reject) => {
-      glbLoader.load("resources/props/balloon.glb", function (gltf) {
-        const balloon = gltf.scene;
-        let balloonGeometries = [];
-        balloon.speed = api.speed;
-        balloon.traverse(function (node) {
-          if (node.isMesh) {
-            balloonGeometries.push(node.geometry);
-          }
-        });
-  
-        const balloonMaterial = new THREE.MeshPhongMaterial();
-        const balloonMeshPromise = new THREE.InstancedMesh(
-          balloonGeometries[0], 
-          balloonMaterial,
-          maxBalloons,
-        );
-  
-        resolve(balloonMeshPromise);
-      }, null, reject);
+export function createBalloons(scene, api, glbLoader, propData) {   
+    glbLoader.load("resources/props/balloon.glb", function (gltf) {
+    const balloon = gltf.scene;
+    let balloonGeometries = [];
+    balloon.speed = api.speed;
+    balloon.traverse(function (node) {
+        if (node.isMesh) {
+        balloonGeometries.push(node.geometry);
+        }
+    });
+
+    const balloonMaterial = new THREE.MeshPhongMaterial();
+    const balloonMesh = new THREE.InstancedMesh(
+        balloonGeometries[0], 
+        balloonMaterial,
+        maxBalloons,
+    );
+    
+    initBalloons(scene,api,propData,balloonMesh);
+    return balloonMesh;
+
     });
 }
   
@@ -42,9 +42,7 @@ export function createBalloons(scene, api, glbLoader) {
 //--------------------------------------------------------------------------------------------
 //  Initialize the balloons by setting their properties and then adding the data to the array
 //--------------------------------------------------------------------------------------------
-export function initBalloons(scene,api,balloonMesh) {
-    let balloonData = [];
-
+export function initBalloons(scene,api,propData,balloonMesh) {
     for (let i = 0; i < maxBalloons; i++) {
         let startX = Math.random() * 100 - 50;
         let startY = Math.random() * 10 - 100;
@@ -52,7 +50,7 @@ export function initBalloons(scene,api,balloonMesh) {
         let startPos = new THREE.Vector3(startX, startY, startZ);
         let randomY = Math.random() * 0.1 - 0.05;
 
-        balloonData.push({
+        propData.balloonData.push({
         position: startPos.clone(),
         quaternion: quaternion.clone(),
         scale: balloonScale.clone(),
@@ -69,8 +67,6 @@ export function initBalloons(scene,api,balloonMesh) {
     }
 
     scene.add(balloonMesh);
-
-    return balloonData;
 }
 
 //--------------------------------------------------------------------------------------------

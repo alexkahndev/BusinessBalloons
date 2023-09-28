@@ -12,6 +12,7 @@
 //********************************************************************************************************************
 
 import * as THREE from "three";
+import * as BALLOON from "./balloon.js";
 import Stats from "three/addons/libs/stats.module.js";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -40,9 +41,12 @@ let balloonMesh, poppedBalloonMesh;
 let logoTexture;
 
 //--------------------------------------------------------------------------------------------
-//  Object Variables
+//  Prop Variables
 //--------------------------------------------------------------------------------------------
 let balloonData = [];
+let propData = {
+  balloonData: [],
+};
 
 //--------------------------------------------------------------------------------------------
 //  Mouse Variables
@@ -78,6 +82,8 @@ const audioListener = new THREE.AudioListener();
 const quaternion = new THREE.Quaternion();
 const balloonScale = new THREE.Vector3(20, 20, 20);
 const maxBalloons = 50;
+const gridWidthScale = 0.09;
+const gridHeightScale = 0.09;
 
 const api = {
   velocity: 0.1,
@@ -95,7 +101,7 @@ animate();
 
 
 //********************************************************************************************************************
-//  Functions
+//  Initialization Functions
 //********************************************************************************************************************
 
 //--------------------------------------------------------------------------------------------
@@ -181,7 +187,7 @@ function init() {
 //--------------------------------------------------------------------------------------------
 function createGUI() {
   gui = new GUI();
-  gui.add(api, "velocity", 0, 2).onChange(updateVelocities);
+  gui.add(api, "velocity", 0, 0.5).onChange(updateVelocities);
   gui.addColor(api, "color").onChange(updateBalloonColors);
   gui.add(api, "score").listen();
   gui.add(api, "timer").listen();
@@ -220,8 +226,8 @@ function createBalloons() {
 //--------------------------------------------------------------------------------------------
 function initBalloons() {
   for (let i = 0; i < maxBalloons; i++) {
-    let startX = Math.random() * 50 - 25;
-    let startY = Math.random() * 10 - 50;
+    let startX = (Math.random() * window.innerWidth - window.innerWidth / 2) * gridWidthScale;
+    let startY = Math.random() * 15 - window.innerHeight * gridHeightScale;
     let startZ = Math.random() * 50 - 25;
     let startPos = new THREE.Vector3(startX, startY, startZ);
     let randomY = Math.random() * 0.1 - 0.05;
@@ -242,6 +248,10 @@ function initBalloons() {
   scene.add(balloonMesh);
 }
 
+//--------------------------------------------------------------------------------------------
+//  Update the position of the balloons based on their velocity and reset them when they reach
+//  the top of the screen
+//--------------------------------------------------------------------------------------------
 function updateBalloonPositions() {
   for (let i = 0; i < maxBalloons; i++) {
     let balloon = balloonData[i];
@@ -250,9 +260,9 @@ function updateBalloonPositions() {
 
     updatedPos.add(velocity);
 
-    if (updatedPos.y > 50) {
-      updatedPos.x = Math.random() * 50 - 25;
-      updatedPos.y = Math.random() * 10 - 50;
+    if (updatedPos.y > window.innerHeight * gridHeightScale - 15) {
+      updatedPos.x = (Math.random() * window.innerWidth - window.innerWidth / 2) * gridWidthScale;
+      updatedPos.y = Math.random() * 10 - window.innerHeight * gridHeightScale;
       updatedPos.z = Math.random() * 50 - 25;
       balloonMesh.setColorAt(i, new THREE.Color(api.color));
       balloonData[i].popped = false;
@@ -269,6 +279,9 @@ function updateBalloonPositions() {
   balloonMesh.instanceMatrix.needsUpdate = true;
 }
 
+//--------------------------------------------------------------------------------------------
+//  Update the color of the balloons based on the color picker
+//--------------------------------------------------------------------------------------------
 function updateBalloonColors() {
   let newColor = new THREE.Color(api.color);
   for (let i = 0; i < maxBalloons; i++) {
@@ -278,6 +291,9 @@ function updateBalloonColors() {
   balloonMesh.instanceColor.needsUpdate = true;
 }
 
+//--------------------------------------------------------------------------------------------
+//  Update the velocity of the balloons based on the slider
+//--------------------------------------------------------------------------------------------
 function updateVelocities() {
   for (let i = 0; i < maxBalloons; i++) {
     let randomY = Math.random() * 0.1;
@@ -285,18 +301,29 @@ function updateVelocities() {
   }
 }
 
-// Mouse and Window Events
+//********************************************************************************************************************
+//  Event Functions
+//********************************************************************************************************************
 
+//--------------------------------------------------------------------------------------------
+//  When the screen is resized, update the camera and renderer as well as any other components
+//--------------------------------------------------------------------------------------------
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+//--------------------------------------------------------------------------------------------
+//  Handle the mouse moving over the screen
+//--------------------------------------------------------------------------------------------
 function mouseMove(event) {
   event.preventDefault();
 }
 
+//--------------------------------------------------------------------------------------------
+//  When the mouse is clicked, check if it intersects with a balloon and pop it if it does
+//--------------------------------------------------------------------------------------------
 function mouseDown(event) {
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -312,8 +339,13 @@ function mouseDown(event) {
   }
 }
 
+//********************************************************************************************************************
 // Key Press Functions
+//********************************************************************************************************************
 
+//--------------------------------------------------------------------------------------------
+//  When a key is pressed, check which key it is and perform the appropriate action
+//--------------------------------------------------------------------------------------------
 function onDocumentKeyDown(event) {
   if (event.keyCode == 87) {
     // Keycode for 'W'
@@ -341,10 +373,18 @@ function onDocumentKeyDown(event) {
   }
 }
 
+//--------------------------------------------------------------------------------------------
+//  When a key is released, check which key it is and perform the appropriate action
+//--------------------------------------------------------------------------------------------
 function onDocumentKeyUp(event) {}
 
+//********************************************************************************************************************
 // Animation Functions
+//********************************************************************************************************************
 
+//--------------------------------------------------------------------------------------------
+//  The render loop that updates the scene every frame
+//--------------------------------------------------------------------------------------------
 function animate() {
   requestAnimationFrame(animate);
 
